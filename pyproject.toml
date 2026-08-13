@@ -1,0 +1,39 @@
+[project]
+name = "dsh-web-mcp"
+version = "0.1.0"
+description = "MCP bridge for DeepSeek Harness (DSH) web UI — expose cordis RPC over /api/ as stdio MCP tools so any MCP client (Codex CLI, Claude Desktop) can drive DSH sessions with prompt-prefix cache reuse."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "chenty" }]
+keywords = ["deepseek", "deepseek-harness", "dsh", "mcp", "model-context-protocol", "agent", "harness"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Repository = "https://github.com/cv588888888888888888888ju/dsh-web-mcp"
+Issues = "https://github.com/cv588888888888888888888ju/dsh-web-mcp/issues"
+
+dependencies = [
+    "mcp>=1.0,<2.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dsh_mcp"]
+
+[project.scripts]
+dsh-web-mcp = "dsh_mcp.server:main"
