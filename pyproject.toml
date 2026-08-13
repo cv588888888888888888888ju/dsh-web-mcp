@@ -17,11 +17,6 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-
-[project.urls]
-Repository = "https://github.com/cv588888888888888888888ju/dsh-web-mcp"
-Issues = "https://github.com/cv588888888888888888888ju/dsh-web-mcp/issues"
-
 dependencies = [
     "mcp>=1.0,<2.0",
     "httpx>=0.27.0",
