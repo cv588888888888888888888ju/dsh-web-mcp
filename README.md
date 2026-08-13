@@ -8,6 +8,8 @@
 
 MCP bridge for [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-harness) web UI — exposes the cordis RPC API over HTTP `/api/<endpoint>` as stdio MCP tools. Any MCP client (Codex CLI, Claude Desktop, etc.) can drive DSH sessions and benefit from prompt-prefix cache reuse.
 
+**🌐 中文文档：[README.zh.md](README.zh.md)**
+
 ## What is in the box
 
 Five tools, all backed by DSH web's cordis RPC over HTTP `/api/<endpoint>`:
@@ -39,6 +41,19 @@ Then run as a stdio MCP server:
 ```powershell
 uv run dsh-web-mcp
 ```
+
+## Wire up Hermes Agent
+
+Register with `hermes mcp add`:
+
+```powershell
+hermes mcp add dsh --command uv --args --directory C:\Users\chenty\Documents\feishu-bot\dsh-mcp run dsh-web-mcp
+```
+
+> ⚠️ **Known pitfall (tested)**:
+> - Do **not** pass `--env DSH_BASE_URL=...` — it gets forwarded to `dsh-web-mcp`'s argparse and fails with `unrecognized arguments`. Set `DSH_BASE_URL` as a user/system environment variable instead.
+> - A **new session** is required after registering (config loads at session start).
+> - If prompted `Enable all 5 tools? [Y/n/select]`, answer `Y`.
 
 ## Wire up Codex CLI
 
