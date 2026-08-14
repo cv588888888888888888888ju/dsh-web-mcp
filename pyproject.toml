@@ -1,6 +1,6 @@
 [project]
 name = "dsh-web-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "MCP bridge for DeepSeek Harness (DSH) web UI — expose cordis RPC over /api/ as stdio MCP tools so any MCP client (Codex CLI, Claude Desktop) can drive DSH sessions with prompt-prefix cache reuse."
 readme = "README.md"
 requires-python = ">=3.10"
