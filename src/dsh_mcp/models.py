@@ -100,3 +100,32 @@ class SessionHistoryValue(BaseModel):
     events: list[HistoryEntry] = Field(default_factory=list)
     hasMore: bool = False
     projections: Optional[SessionProjections] = None
+
+
+class ApprovalRequest(BaseModel):
+    """One answerable approval request, as delivered by the events-mux stream.
+
+    Mirrors the `approval/requested` server-request frame: `rpcId` is the
+    server-request echo token a `POST /api/respond` client-response must reuse
+    (minted by the host's pending table — it is NOT the audit `approvalId`),
+    `approvalId` is the audit id shared with the `approval/asked` session event.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    sessionId: str
+    approvalId: str
+    toolName: str
+    callId: Optional[str] = None
+    reason: Optional[str] = None
+    rpcId: str = ""
+
+
+class RespondReceipt(BaseModel):
+    """HTTP body of `POST /api/respond`: `{accepted:true}` or `{accepted:false, reason}`."""
+
+    model_config = ConfigDict(extra="allow")
+
+    accepted: bool
+    reason: Optional[str] = None
+

@@ -12,21 +12,62 @@ MCP bridge for [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-
 
 ## What is in the box
 
-Five tools, all backed by DSH web's cordis RPC over HTTP `/api/<endpoint>`:
+Eight tools, all backed by DSH web's cordis RPC over HTTP `/api/<endpoint>`:
 
 | Tool | Purpose |
 |---|---|
 | `dsh_list_workspaces` | Enumerate every workspace known to the running DSH web UI. |
 | `dsh_create_session` | Adopt a directory (creating the workspace if missing), then create a session bound to it. Selects the model in one shot. Returns `sessionId`. |
-| `dsh_send_message` | Send a prompt and **block** until the assistant turn completes. Returns the assistant text plus per-turn token usage including `cacheReadTokens` / `cacheWriteTokens`. |
+| `dsh_send_message` | Send a prompt and **block** until the assistant turn completes. Returns the assistant text plus per-turn token usage including `cacheReadTokens` / `cacheWriteTokens`. When the agent requests permission, it answers via an MCP **sampling callback** (see below) so the turn keeps running. |
+| `dsh_wait_turn` | Wait for the in-flight turn to finish **without** sending a new prompt. Use it after answering a pending approval. |
+| `dsh_list_pending_approvals` | List still-pending approval requests (`approvalId`, `toolName`, `callId?`, `reason?`, `rpcId`), optionally filtered by `session_id`. |
+| `dsh_respond_approval` | Answer one pending approval (`allowed-once` / `rejected`); returns the DSH receipt (`accepted: true` = the answer was consumed). |
 | `dsh_get_session_stats` | Fetch cached projections: `tokenUsage`, `sessionStats`, `contextPressure`. |
 | `dsh_resume_session` | Verify a session is still alive and surface its current model. Subsequent `dsh_send_message` calls reuse the prompt prefix. |
+
+## Approval callback (权限审批回调)
+
+DSH agents ask for permission before sensitive tool calls (e.g. a sandbox
+escalation to `danger-full-access`). The request surfaces in the session log
+as `approval/asked` and — on the DSH web event stream — as an answerable
+`approval/requested` frame. This bridge turns that into a two-track callback:
+
+1. **Sampling callback (default, works with Hermes CN Desktop ≥ 0.18)**: while
+   `dsh_send_message` / `dsh_wait_turn` are waiting for the turn, the server
+   sends the client a `sampling/createMessage` request describing the tool and
+   the DSH-provided reason; the client's answer (`allowed-once` / `rejected`)
+   is posted back to DSH via `POST /api/respond` and the turn continues.
+   Hermes supports this out of the box (`sampling` enabled by default; see its
+   *Native MCP* docs). Sampling needs to run inside an MCP request, so it is
+   only active on the real MCP transport.
+2. **Tool fallback (works with any MCP client)**: set
+   `auto_respond_approvals=false` on `dsh_send_message` (or sampling fails /
+   is unavailable), and the call returns immediately with
+   `awaitingApproval: true` + `pendingApprovals` instead of waiting. The
+   caller (or a human) then decides:
+
+   ```text
+   dsh_send_message(...)                    -> {"awaitingApproval": true, "pendingApprovals": [...]}
+   dsh_respond_approval(session_id, <approvalId>, "allowed-once")   -> {"accepted": true}
+   dsh_wait_turn(session_id, ...)           -> normal turn result
+   ```
+
+   `dsh_list_pending_approvals` lists whatever is still pending at any moment
+   (the DSH event stream replays every unanswered approval on connect).
+
+Wire facts (verified against DSH source and a live probe): the answer must
+echo the `rpcId` of the `approval/requested` frame — a fresh UUID minted by
+the host's pending table, **not** the audit `approvalId` — and the payload
+must carry the matching `approvalId`. The event stream is a **WebSocket**
+(`GET /api/events.mux`; plain HTTP gets 426), which is why the `websockets`
+package is a hard dependency.
 
 ## Requirements
 
 - Python 3.10+
 - A running `dsh web` instance on `http://127.0.0.1:3080` (override with `DSH_BASE_URL`)
 - `uv` (recommended) or `pip`
+- `websockets` (installed by `uv sync`; needed for the approval event stream)
 
 ## Install
 
@@ -53,7 +94,7 @@ hermes mcp add dsh --command uv --args --directory C:\Users\chenty\Documents\fei
 > ⚠️ **Known pitfall (tested)**:
 > - Do **not** pass `--env DSH_BASE_URL=...` — it gets forwarded to `dsh-web-mcp`'s argparse and fails with `unrecognized arguments`. Set `DSH_BASE_URL` as a user/system environment variable instead.
 > - A **new session** is required after registering (config loads at session start).
-> - If prompted `Enable all 5 tools? [Y/n/select]`, answer `Y`.
+> - If prompted `Enable all 8 tools? [Y/n/select]`, answer `Y`.
 
 ## Wire up Codex CLI
 
@@ -69,11 +110,11 @@ args = ["--directory", "C:\\path\\to\\dsh-web-mcp", "run", "dsh-web-mcp"]
 DSH_BASE_URL = "http://127.0.0.1:3080"
 ```
 
-Restart Codex CLI. The five `dsh_*` tools appear alongside the built-in tools.
+Restart Codex CLI. The eight `dsh_*` tools appear alongside the built-in tools.
 
 ## Probe
 
-`probe.py` is a developer-side smoke test that exercises all five tools end-to-end against the running DSH web UI:
+`probe.py` is a developer-side smoke test that exercises all tools end-to-end against the running DSH web UI — including the approval chain (trigger a real approval, answer it with `accepted: true`, and wait for the turn to finish):
 
 ```powershell
 uv run python probe.py
@@ -90,11 +131,15 @@ It prints a JSON blob per step; expected outcome is
 }
 ```
 
+The approval steps report `send_message_awaiting_approval`, `respond_approval`
+(`accepted: true`), and `wait_turn_after_approval` (`reply_contains: "APPROVAL_OK"`).
+
 ## Failure modes
 
 - **DSH web not reachable** — the server starts but every tool returns `{"ok": false, "error": "DSH web not reachable at ..."}`. Make sure `dsh web` is running (`dsh web --port 3080`).
 - **DSH schema drift (rc.X → rc.Y)** — unknown field errors come back as `{ok: false, error: "dsh returned <code>: <msg>"}`. The model schema in `models.py` is intentionally `extra="allow"` so additional fields pass through; reported mis-parses should be filed against `models.py`.
-- **Prompt timeout** — `dsh_send_message` times out after `timeout_s` (default 120s); rerun with a larger value if your prompt is long.
+- **Prompt timeout** — `dsh_send_message` times out after `timeout_s` (default 120s); rerun with a larger value if your prompt is long. An approval that nobody answers also holds the turn: use `dsh_list_pending_approvals` / `dsh_respond_approval` (or wait for the human in the DSH web UI) and then `dsh_wait_turn`.
+- **Sampling unavailable** — outside an MCP request (e.g. `probe.py`) or with a client that does not implement `sampling/createMessage`, `dsh_send_message` falls back to returning `awaitingApproval: true` with `pendingApprovals`; use the tool fallback above.
 
 ## Configuration
 

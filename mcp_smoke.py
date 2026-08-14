@@ -49,6 +49,9 @@ async def run() -> int:
                 "dsh_list_workspaces",
                 "dsh_create_session",
                 "dsh_send_message",
+                "dsh_wait_turn",
+                "dsh_list_pending_approvals",
+                "dsh_respond_approval",
                 "dsh_get_session_stats",
                 "dsh_resume_session",
             }

@@ -21,6 +21,10 @@ dependencies = [
     "mcp>=1.0,<2.0",
     "httpx>=0.27.0",
     "pydantic>=2.6.0",
+    # Approval callback: DSH serves the event mux (the only source of the
+    # rpcId an approval answer must echo) as a WebSocket, so a WS client is
+    # required. Pure-Python `websockets` keeps the bridge dependency-light.
+    "websockets>=12.0",
 ]
 
 [build-system]

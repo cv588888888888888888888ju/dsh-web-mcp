@@ -150,3 +150,41 @@ class DshClient:
             message=str(err.get("message") or "no message"),
             endpoint=endpoint,
         )
+
+    async def respond(self, message: dict[str, Any]) -> dict[str, Any]:
+        """Answer a pending server-request via ``POST /api/respond``.
+
+        ``/api/respond`` is a client-response carrier (not in the rpc-map, no
+        new id minted): the body is the full client-response envelope echoing
+        the server-request's ``rpcId``, and the HTTP body is an RpcReceipt
+        (``{"accepted":true}`` or ``{"accepted":false,"reason":"..."}``) rather
+        than a ``server-response`` envelope — so this method does not share the
+        ``call()`` envelope parsing.
+
+        Returns the parsed receipt dict. Raises DshConnectionError for
+        transport-level failures.
+        """
+        if self._client is None:
+            raise DshConnectionError("client not started; call start() first")
+        try:
+            resp = await self._client.post("/api/respond", json=message)
+        except httpx.HTTPError as exc:
+            raise DshConnectionError(
+                f"DSH web not reachable at {self.base_url}: {exc}"
+            ) from exc
+        if resp.status_code != 200:
+            raise DshConnectionError(
+                f"DSH respond returned HTTP {resp.status_code}: {resp.text[:200]}"
+            )
+        try:
+            receipt = resp.json()
+        except Exception as exc:
+            raise DshConnectionError(
+                f"DSH respond returned non-JSON response: {exc}"
+            ) from exc
+        if not isinstance(receipt, dict) or "accepted" not in receipt:
+            raise DshConnectionError(
+                f"DSH respond returned unexpected receipt: {str(receipt)[:300]}"
+            )
+        return receipt
+
